@@ -1,0 +1,61 @@
+Cloudflare WARP（俗称 1.1.1.1）之所以被称为“永远不会倒”，是因为它本质上是 Cloudflare 提供的官方网络加速服务，走的是 WireGuard 协议。虽然它的官方客户端在国内连接可能比较慢，但作为开发者，我们可以通过“**优选 IP**”和“**生成 WireGuard 配置**”将其整合进 Clash，实现极速且稳定的免费上网。
+
+以下是针对 Windows 7 用户的详细实操步骤：
+
+---
+
+### 第一步：生成 WireGuard 配置文件
+由于你不想用官方客户端，我们需要把 WARP 的账号信息提取出来，变成 Clash 能识别的 `WireGuard` 节点。
+
+1.  **下载工具：** 在 GitHub 搜索并下载 `wgcf` (一个跨平台的 WARP 命令行工具)。
+2.  **生成账号：** 在文件夹里打开 CMD，运行以下命令：
+    ```cmd
+    wgcf register
+    wgcf generate
+    ```
+3.  **获取结果：** 文件夹里会出现一个 `wgcf-profile.conf` 文件。打开它，你会看到类似以下内容：
+    * `PrivateKey`: 你的私钥
+    * `Address`: 你的内部 IP（通常是 `172.16.0.2/32`）
+    * `Endpoint`: 默认是 `engage.cloudflareclient.com:2408`
+
+---
+
+### 第二步：进行“优选 IP”（核心步骤）
+默认的 `Endpoint`（服务器地址）在国内连接非常缓慢甚至断流。所谓“优选 IP”，就是通过工具扫描出 Cloudflare 在全球离你最近、丢包率最低的服务器节点（通常是香港、新加坡、日本的节点）。
+
+1.  **下载优选工具：** 搜索“WARP 优选 IP 脚本”（如 `CloudflareWarp-IP-Scanner`）。
+2.  **开始扫描：** 运行脚本。它会测试几百个 Cloudflare 的 IP。
+3.  **记录结果：** 脚本结束后，会给出一个延迟最低的 IP（例如 `162.159.193.10:2408`）。
+
+---
+
+### 第三步：将 WARP 填入 Clash
+你现在只需要在 Clash 的配置文件（`.yaml`）中的 `proxies` 模块下手动添加一个节点：
+
+```yaml
+proxies:
+  - name: "CF-WARP-优选"
+    type: wireguard
+    server: 162.159.193.10 # 这里填你优选出来的 IP
+    port: 2408
+    ip: 172.16.0.2 # 对应 wgcf-profile.conf 里的 Address
+    private-key: 你的私钥 # 对应 wgcf-profile.conf 里的 PrivateKey
+    udp: true
+    mtu: 1280
+    remote-dns-resolve: false
+```
+
+---
+
+### 为什么这个方案适合你？
+
+1.  **完全免费：** 这是 Cloudflare 提供的基础设施，不限流量。
+2.  **不再“看脸”：** 你发现有些机场上午挂了，是因为那些是公益节点，会被针对性封锁。而 Cloudflare 的优选 IP 是在海量 CDN 节点中寻找“漏网之鱼”，防火墙很难将其彻底封死。
+3.  **对 Win7 友好：** 只要你的 Clash（或 v2rayN）内核支持 WireGuard 协议，它就不依赖 Windows 7 那些老旧的系统驱动，稳定性极高。
+
+### 💡 针对 Windows 7 的特别提示
+如果你发现填入 Clash 后连不上：
+* **MTU 值：** 尝试将 `mtu` 改为 `1280` 甚至更低（如 `1100`），因为 Windows 7 对 UDP 包的分片处理有时会有问题。
+* **UDP 支持：** 确保你的网络（以及手机共享出来的网络）支持 UDP 流量。如果不支持，WARP 将无法工作。
+
+**终极建议：** 既然你是开发者，可以去 GitHub 搜一个叫 `warp-reg` 的 Nim 脚本或者类似的 C++ 工具，它们甚至可以帮你一键申请 **WARP+** 的 24PB 流量密钥，让速度更上一层楼。
